@@ -26,9 +26,6 @@ request.interceptors.response.use(
     return response.data
   },
   (error) => {
-    const message = error.response?.data?.message || error.message || '请求失败'
-    ElMessage.error(message)
-    
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       window.location.href = '/login'

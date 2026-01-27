@@ -46,6 +46,26 @@
           </div>
         </el-form-item>
 
+        <el-form-item v-if="showCaptcha" prop="captchaValue" class="captcha-form-item">
+          <div class="captcha-container">
+            <div class="input-with-label captcha-input">
+              <span class="label-text">验证码</span>
+              <el-input
+                ref="captchaInputRef"
+                v-model="loginForm.captchaValue"
+                placeholder="请输入验证码"
+                maxlength="4"
+                size="large"
+                @keyup.enter="handleLogin"
+              />
+            </div>
+            <div class="captcha-image" @click="refreshCaptcha" title="点击刷新">
+              <img v-if="captchaImage" :src="captchaImage" alt="验证码" />
+              <span v-else class="captcha-loading">加载中...</span>
+            </div>
+          </div>
+        </el-form-item>
+
         <el-form-item>
           <div class="form-footer">
             <el-checkbox v-model="rememberMe">记住密码</el-checkbox>
@@ -79,17 +99,25 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { getCaptcha } from '@/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const loginFormRef = ref<FormInstance>()
+const captchaInputRef = ref()
 const loading = ref(false)
+const isSubmitting = ref(false)  // 独立的提交标志
 const rememberMe = ref(false)
+const showCaptcha = ref(false)
+const captchaImage = ref('')
+const captchaKey = ref('')
+let currentMessageInstance: any = null  // 当前显示的消息实例
 
 const loginForm = reactive({
   email: '',
-  password: ''
+  password: '',
+  captchaValue: ''
 })
 
 const loginRules: FormRules = {
@@ -101,31 +129,117 @@ const loginRules: FormRules = {
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码至少6位', trigger: 'blur' }
+  ],
+  captchaValue: [
+    { 
+      validator: (rule: any, value: any, callback: any) => {
+        if (!showCaptcha.value) {
+          callback()
+          return
+        }
+        if (!value) {
+          callback(new Error('请输入验证码'))
+          return
+        }
+        if (value.length !== 4) {
+          callback(new Error('验证码为4位'))
+          return
+        }
+        callback()
+      }, 
+      trigger: 'blur' 
+    }
   ]
 }
 
+// 获取验证码
+const fetchCaptcha = async () => {
+  try {
+    const res: any = await getCaptcha()
+    // 后端返回格式：{ success: true, data: { captchaKey, captchaImage } }
+    const captchaData = res.data || res
+    captchaKey.value = captchaData.captchaKey
+    captchaImage.value = captchaData.captchaImage
+  } catch (error) {
+    console.error('Failed to fetch captcha:', error)
+    ElMessage.error('获取验证码失败')
+  }
+}
+
+// 刷新验证码
+const refreshCaptcha = () => {
+  loginForm.captchaValue = ''
+  fetchCaptcha()
+}
+
+
+
 const handleLogin = async () => {
   if (!loginFormRef.value) return
+  
+  // 使用独立标志防止重复提交
+  if (isSubmitting.value) {
+    console.log('已在提交中，忽略重复点击')
+    return
+  }
+  
+  isSubmitting.value = true
+  loading.value = true
 
-  await loginFormRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        await authStore.login({
-          email: loginForm.email,
-          password: loginForm.password
-        })
-
-        ElMessage.success('登录成功！')
-        router.push('/')
-      } catch (error: any) {
-        console.error('Login error:', error)
-        ElMessage.error(error.response?.data?.message || '登录失败')
-      } finally {
-        loading.value = false
-      }
+  try {
+    // 使用 Promise 方式验证表单
+    const valid = await loginFormRef.value.validate().catch(() => false)
+    
+    if (!valid) {
+      return
     }
-  })
+    
+    // 根据是否显示验证码来决定传递的参数
+    const loginParams: any = {
+      email: loginForm.email,
+      password: loginForm.password
+    }
+    
+    // 如果验证码显示，则传递验证码参数
+    if (showCaptcha.value) {
+      loginParams.captchaKey = captchaKey.value
+      loginParams.captchaValue = loginForm.captchaValue
+    }
+
+    await authStore.login(loginParams)
+
+    ElMessage.success('登录成功！')
+    router.push('/')
+  } catch (error: any) {
+    console.error('Login error:', error)
+    const errorData = error.response?.data
+    
+    // 关闭之前的消息
+    if (currentMessageInstance) {
+      currentMessageInstance.close()
+    }
+    
+    // 检查后端是否要求验证码
+    if (errorData?.requiresCaptcha && !showCaptcha.value) {
+      showCaptcha.value = true
+      await fetchCaptcha()
+      // 等待DOM更新后聚焦验证码输入框
+      setTimeout(() => {
+        captchaInputRef.value?.focus()
+      }, 300)
+      currentMessageInstance = ElMessage.warning(errorData.message || '请输入验证码')
+    } else {
+      currentMessageInstance = ElMessage.error(errorData?.message || '登录失败')
+    }
+    
+    // 刷新验证码
+    if (showCaptcha.value) {
+      refreshCaptcha()
+    }
+  } finally {
+    loading.value = false
+    isSubmitting.value = false
+  }
 }
 
 onMounted(() => {
@@ -134,6 +248,7 @@ onMounted(() => {
     rememberMe.value = true
     loginForm.email = localStorage.getItem('savedEmail') || ''
   }
+  // 不再默认加载验证码，改为登录失败后动态加载
 })
 </script>
 
@@ -302,6 +417,67 @@ onMounted(() => {
 .input-with-label:focus-within {
   box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
   background-color: #e0f2fe;
+}
+
+.captcha-container {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+/* 验证码区域淡入动画 */
+.captcha-form-item {
+  animation: captchaSlideIn 0.4s ease-out;
+}
+
+@keyframes captchaSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 100px;
+  }
+}
+
+.captcha-input {
+  flex: 1;
+}
+
+.captcha-image {
+  width: 120px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid #e0f2fe;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8fafc;
+}
+
+.captcha-image:hover {
+  border-color: #17a2b8;
+  box-shadow: 0 2px 8px rgba(23, 162, 184, 0.2);
+  transform: scale(1.02);
+}
+
+.captcha-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.captcha-loading {
+  font-size: 12px;
+  color: #7f8c8d;
 }
 
 .label-text {
