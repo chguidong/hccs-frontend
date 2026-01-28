@@ -27,6 +27,7 @@
               size="large"
               prefix-icon="User"
               clearable
+              autocomplete="off"
             />
           </div>
         </el-form-item>
@@ -40,6 +41,7 @@
               size="large"
               prefix-icon="Message"
               clearable
+              autocomplete="off"
             />
           </div>
         </el-form-item>
@@ -53,6 +55,7 @@
               size="large"
               prefix-icon="Phone"
               clearable
+              autocomplete="off"
             />
           </div>
         </el-form-item>
@@ -67,6 +70,7 @@
               size="large"
               prefix-icon="Lock"
               show-password
+              autocomplete="new-password"
             />
           </div>
         </el-form-item>
@@ -81,6 +85,7 @@
               size="large"
               prefix-icon="Lock"
               show-password
+              autocomplete="new-password"
             />
           </div>
         </el-form-item>
