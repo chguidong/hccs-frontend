@@ -18,13 +18,13 @@
         class="login-form"
         @submit.prevent="handleLogin"
       >
-        <el-form-item prop="email">
+        <el-form-item prop="account">
           <div class="input-with-label">
-            <span class="label-text">邮箱</span>
+            <span class="label-text">账号</span>
             <el-input
-              v-model="loginForm.email"
-              placeholder="请输入邮箱"
-              prefix-icon="Message"
+              v-model="loginForm.account"
+              placeholder="请输入邮箱或手机号"
+              prefix-icon="User"
               clearable
               size="large"
             />
@@ -115,16 +115,15 @@ const captchaKey = ref('')
 let currentMessageInstance: any = null  // 当前显示的消息实例
 
 const loginForm = reactive({
-  email: '',
+  account: '',
   password: '',
   captchaValue: ''
 })
 
 const loginRules: FormRules = {
-  email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' },
-    { pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, message: '邮箱格式不正确', trigger: 'blur' }
+  account: [
+    { required: true, message: '请输入账号', trigger: 'blur' },
+    { min: 3, message: '账号至少3位', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -196,7 +195,7 @@ const handleLogin = async () => {
     
     // 根据是否显示验证码来决定传递的参数
     const loginParams: any = {
-      email: loginForm.email,
+      account: loginForm.account,
       password: loginForm.password
     }
     
@@ -246,7 +245,7 @@ onMounted(() => {
   // 从 localStorage 加载记住的密码
   if (localStorage.getItem('rememberMe') === 'true') {
     rememberMe.value = true
-    loginForm.email = localStorage.getItem('savedEmail') || ''
+    loginForm.account = localStorage.getItem('savedAccount') || ''
   }
   // 不再默认加载验证码，改为登录失败后动态加载
 })

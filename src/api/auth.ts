@@ -1,7 +1,7 @@
 ﻿import request from '@/utils/request'
 
 export interface LoginParams {
-  email: string
+  account: string
   password: string
   captchaId?: string
   captchaCode?: string
